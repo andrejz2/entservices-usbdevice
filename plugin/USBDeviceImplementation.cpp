@@ -605,8 +605,10 @@ uint32_t USBDeviceImplementation::getUSBExtInfoStructFromDeviceDescriptor(libusb
         }
         else
         {
-            uint8_t maxIds = (uint8_t)(((unsigned int)retValue - 2) / 2);
-            pUSBDeviceInfo->numLanguageIds = std::min((uint8_t)((langBuff[0] - 2) / 2), maxIds);
+            // Use unsigned int to avoid uint8_t truncation before the final min/assign.
+            unsigned int maxIds = ((unsigned int)retValue - 2u) / 2u;
+            unsigned int descriptorIds = ((unsigned int)langBuff[0] - 2u) / 2u;
+            pUSBDeviceInfo->numLanguageIds = (uint8_t)std::min(descriptorIds, maxIds);
         }
 
         LOGINFO("numLanguageIDs = %d", pUSBDeviceInfo->numLanguageIds);
