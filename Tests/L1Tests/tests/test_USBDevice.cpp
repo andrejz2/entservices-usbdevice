@@ -436,6 +436,7 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithSingleMassStorageUSBSuccessCase)
         {
             std::cout << "malloc failed";
             len = 0;
+            *list = nullptr;
         }
         else
         {
@@ -649,6 +650,7 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithMultipleMassStorageUSBSuccessCase)
         {
             std::cout << "malloc failed";
             len = 0;
+            *list = nullptr;
         }
         else
         {
@@ -780,6 +782,7 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithMultipleMassStorageUSBSuccessCase)
         {
             std::cout << "malloc failed";
             len = 0;
+            *list = nullptr;
         }
         else
         {
@@ -1132,6 +1135,7 @@ TEST_F(USBDeviceTest, BindDriver_NoDevicesAvailable)
         {
             std::cout << "malloc failed";
             len = 0;
+            *list = nullptr;
         }
         else
         {

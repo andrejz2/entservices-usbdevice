@@ -27,6 +27,7 @@
 #include <thread>
 #include <atomic>
 #include <memory>
+#include <chrono>
 #include <fstream>
 #include <com/com.h>
 #include <core/core.h>

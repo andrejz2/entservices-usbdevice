@@ -506,7 +506,9 @@ uint32_t USBDeviceImplementation::getUSBDescriptorValue(libusb_device_handle *ha
                 stringDescriptor = string(reinterpret_cast<char*>(descBuf), retValue);
                 status = Core::ERROR_NONE;
             }
-            LOGERR("languageID: %u, libusb_get_string_descriptor failed: %s", languageID, libusb_strerror((enum libusb_error)retValue));
+            // Note: this log is intentional - it reports the original unicode descriptor
+            // failure that triggered the ASCII fallback path above.
+            LOGWARN("languageID: %u, libusb_get_string_descriptor failed, fell back to ASCII: %d", languageID, retValue);
         }
         else if (descBuf[1] != LIBUSB_DT_STRING)
         {
@@ -594,15 +596,16 @@ uint32_t USBDeviceImplementation::getUSBExtInfoStructFromDeviceDescriptor(libusb
 
         // FIX(Coverity): Guard against integer underflow: langBuff[0] is uint8_t,
         // so (langBuff[0] - 2) wraps to a huge value if langBuff[0] < 2.
-        // Also clamp to the actual number of bytes returned (retValue).
+        // Also clamp to the actual number of bytes returned (retValue), guarding
+        // against negative retValue from a failed call.
         // Impact: Internal logic corrected. Public API unchanged.
-        if (langBuff[0] < 2)
+        if (langBuff[0] < 2 || retValue < 2)
         {
             pUSBDeviceInfo->numLanguageIds = 0;
         }
         else
         {
-            uint8_t maxIds = (uint8_t)((retValue - 2) / 2);
+            uint8_t maxIds = (uint8_t)(((unsigned int)retValue - 2) / 2);
             pUSBDeviceInfo->numLanguageIds = std::min((uint8_t)((langBuff[0] - 2) / 2), maxIds);
         }
 
@@ -883,10 +886,10 @@ uint32_t USBDeviceImplementation::getUSBDeviceStructFromDeviceDescriptor(libusb_
                       LOGWARN ("device Path not found retrying it");
                       --retryCount;
                       // FIX(Coverity): Replaced blocking sleep(2) with a short non-blocking
-                      // usleep so the libusb event-handling thread is not blocked for 2 seconds.
+                      // sleep_for so the libusb event-handling thread is not blocked for 2 seconds.
                       // The retry loop already limits attempts; a brief yield is sufficient.
                       // Impact: Internal logic corrected. Public API unchanged.
-                      usleep(200000); // 200 ms non-blocking wait
+                      std::this_thread::sleep_for(std::chrono::milliseconds(200));
                     }
                     else
                     {
@@ -1016,11 +1019,21 @@ Core::hresult USBDeviceImplementation::GetDeviceList(IUSBDeviceIterator*& device
 
     if (devCount > 0) 
     {
+        // FIX(Coverity): Guard against null singleton before dereferencing.
+        // Impact: Internal logic corrected. Public API unchanged.
+        USBDeviceImplementation* inst = USBDeviceImplementation::instance();
+        if (inst == nullptr)
+        {
+            LOGERR("USBDeviceImplementation instance is null");
+            libusb_free_device_list(devs, 1);
+            return Core::ERROR_GENERAL;
+        }
+
         for (int index = 0; index < devCount; index++)
         {
             Exchange::IUSBDevice::USBDevice usbDevice = {0};
 
-            uint32_t devStatus = USBDeviceImplementation::instance()->getUSBDeviceStructFromDeviceDescriptor(devs[index], &usbDevice);
+            uint32_t devStatus = inst->getUSBDeviceStructFromDeviceDescriptor(devs[index], &usbDevice);
 
             if (Core::ERROR_NONE == devStatus)
             {
@@ -1078,6 +1091,16 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
 
     if (devCount > 0)
     {
+        // FIX(Coverity): Guard against null singleton before dereferencing.
+        // Impact: Internal logic corrected. Public API unchanged.
+        USBDeviceImplementation* inst = USBDeviceImplementation::instance();
+        if (inst == nullptr)
+        {
+            LOGERR("USBDeviceImplementation instance is null");
+            libusb_free_device_list(devs, 1);
+            return Core::ERROR_GENERAL;
+        }
+
         for (int index = 0; index < devCount; index++)
         {
             char usbDeviceName[10] = {0};
@@ -1093,7 +1116,7 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
             {
                 uint8_t portPath[8] = {0}; // Maximum 8 levels (depends on USB architecture)
 
-                status = USBDeviceImplementation::instance()->getUSBDeviceInfoStructFromDeviceDescriptor(devs[index], &deviceInfo);
+                status = inst->getUSBDeviceInfoStructFromDeviceDescriptor(devs[index], &deviceInfo);
                 // FIX(Coverity): Corrected inverted condition - populate deviceLevel/parentId
                 // on SUCCESS, and log warning on FAILURE.
                 // Impact: Internal logic corrected. Public API unchanged.
