@@ -450,7 +450,17 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithSingleMassStorageUSBSuccessCase)
                 if (nullptr == ret[index])
                 {
                     std::cout << "malloc failed";
+                    // FIX(Coverity): Free already-allocated elements and the list array
+                    // on inner allocation failure to prevent partial memory leak.
+                    // Impact: Test fix. Public API unchanged.
+                    for (int freeIdx = 0; freeIdx < index; ++freeIdx)
+                    {
+                        free(ret[freeIdx]);
+                    }
+                    free(ret);
+                    ret = nullptr;
                     len = 0;
+                    break;
                 }
                 else
                 {
@@ -463,7 +473,10 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithSingleMassStorageUSBSuccessCase)
                     port_number += 1;
                 }
             }
-            *list = ret;
+            if (ret != nullptr)
+            {
+                *list = ret;
+            }
         }
 
         return len;
@@ -472,10 +485,12 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithSingleMassStorageUSBSuccessCase)
     ON_CALL(*p_libUSBImplMock, libusb_free_device_list(::testing::_, ::testing::_))
     .WillByDefault(
     [](libusb_device **list, int unref_devices) {
-        for (int index = 0; index < 2; ++index)
-        {
-            free(list[index]);
-        }
+        // FIX(Coverity): Only free the 1 element that was actually allocated (len=1).
+        // Previously freed list[1] which was out-of-bounds (only list[0] was allocated).
+        // Also free the list array itself to prevent the outer ret pointer leak.
+        // Impact: Test fix. Public API unchanged.
+        free(list[0]);
+        free(list);
     });
 
     EXPECT_CALL(*p_libUSBImplMock, libusb_get_device_descriptor(::testing::_, ::testing::_))
@@ -648,7 +663,15 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithMultipleMassStorageUSBSuccessCase)
                 if (nullptr == ret[index])
                 {
                     std::cout << "malloc failed";
+                    // FIX(Coverity): Free already-allocated elements and outer array on failure.
+                    for (int freeIdx = 0; freeIdx < index; ++freeIdx)
+                    {
+                        free(ret[freeIdx]);
+                    }
+                    free(ret);
+                    ret = nullptr;
                     len = 0;
+                    break;
                 }
                 else
                 {
@@ -661,7 +684,10 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithMultipleMassStorageUSBSuccessCase)
                     port_number += 1;
                 }
             }
-            *list = ret;
+            if (ret != nullptr)
+            {
+                *list = ret;
+            }
         }
 
         return len;
@@ -670,10 +696,13 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithMultipleMassStorageUSBSuccessCase)
     ON_CALL(*p_libUSBImplMock, libusb_free_device_list(::testing::_, ::testing::_))
     .WillByDefault(
     [](libusb_device **list, int unref_devices) {
+        // FIX(Coverity): Free list array itself after element cleanup to prevent leak.
+        // Impact: Test fix. Public API unchanged.
         for (int index = 0; index < 2; ++index)
         {
         free(list[index]);
         }
+        free(list);
     });
 
     EXPECT_CALL(*p_libUSBImplMock, libusb_get_device_descriptor(::testing::_, ::testing::_))
@@ -765,7 +794,15 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithMultipleMassStorageUSBSuccessCase)
                 if (nullptr == ret[index])
                 {
                     std::cout << "malloc failed";
+                    // FIX(Coverity): Free already-allocated elements and outer array on failure.
+                    for (int freeIdx = 0; freeIdx < index; ++freeIdx)
+                    {
+                        free(ret[freeIdx]);
+                    }
+                    free(ret);
+                    ret = nullptr;
                     len = 0;
+                    break;
                 }
                 else
                 {
@@ -778,7 +815,10 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithMultipleMassStorageUSBSuccessCase)
                     port_number += 1;
                 }
             }
-            *list = ret;
+            if (ret != nullptr)
+            {
+                *list = ret;
+            }
         }
 
         return len;
@@ -787,10 +827,13 @@ TEST_F(USBDeviceTest, getDeviceListUsingWithMultipleMassStorageUSBSuccessCase)
     ON_CALL(*p_libUSBImplMock, libusb_free_device_list(::testing::_, ::testing::_))
     .WillByDefault(
     [](libusb_device **list, int unref_devices) {
+        // FIX(Coverity): Free list array itself after element cleanup to prevent leak.
+        // Impact: Test fix. Public API unchanged.
         for (int index = 0; index < 2; ++index)
         {
         free(list[index]);
         }
+        free(list);
     });
 
     EXPECT_CALL(*p_libUSBImplMock, libusb_get_device_descriptor(::testing::_, ::testing::_))
@@ -1103,7 +1146,15 @@ TEST_F(USBDeviceTest, BindDriver_NoDevicesAvailable)
                 if (nullptr == ret[index])
                 {
                     std::cout << "malloc failed";
+                    // FIX(Coverity): Free already-allocated elements and outer array on failure.
+                    for (int freeIdx = 0; freeIdx < index; ++freeIdx)
+                    {
+                        free(ret[freeIdx]);
+                    }
+                    free(ret);
+                    ret = nullptr;
                     len = 0;
+                    break;
                 }
                 else
                 {
@@ -1116,7 +1167,10 @@ TEST_F(USBDeviceTest, BindDriver_NoDevicesAvailable)
                     port_number += 1;
                 }
             }
-            *list = ret;
+            if (ret != nullptr)
+            {
+                *list = ret;
+            }
         }
 
         return len;
@@ -1125,10 +1179,13 @@ TEST_F(USBDeviceTest, BindDriver_NoDevicesAvailable)
     ON_CALL(*p_libUSBImplMock, libusb_free_device_list(::testing::_, ::testing::_))
     .WillByDefault(
     [](libusb_device **list, int unref_devices) {
+        // FIX(Coverity): Free list array itself after element cleanup to prevent leak.
+        // Impact: Test fix. Public API unchanged.
         for (int index = 0; index < 2; ++index)
         {
         free(list[index]);
         }
+        free(list);
     });
 
     EXPECT_CALL(*p_libUSBImplMock, libusb_get_device_descriptor(::testing::_, ::testing::_))

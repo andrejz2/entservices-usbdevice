@@ -67,8 +67,14 @@ namespace Plugin {
         PluginInterfaceRef& operator=(PluginInterfaceRef&& other)
         {
             if (this != &other) {
+                // FIX(Coverity): Also transfer _service to ensure consistent move semantics.
+                // Previously _service was not moved, leaving the target with stale/incorrect state.
+                // Impact: Internal logic corrected. Public API unchanged.
+                Reset();
                 _interface = other._interface;
                 other._interface = nullptr;
+                _service = other._service;
+                other._service = nullptr;
             }
             return *this;
         }

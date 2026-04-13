@@ -23,14 +23,18 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-
-using namespace std;
+// FIX(Coverity): Removed `using namespace std;` from header to prevent namespace
+// pollution in all translation units that include this header.
+// Impact: Internal logic corrected. Public API unchanged.
 
 namespace Utils
 {
-auto MoveFile(
-    const string &from,
-    const string &to) -> bool
+// FIX(Coverity): Added `inline` keyword to prevent ODR violation when this header
+// is included in multiple translation units.
+// Impact: Internal logic corrected. Public API unchanged.
+inline auto MoveFile(
+    const std::string &from,
+    const std::string &to) -> bool
 {
     using namespace WPEFramework::Core;
 
@@ -89,15 +93,18 @@ auto MoveFile(
 * @param[out] res_str - The last non empty line from the input string
 * @return whether or not a non empty line was found
 */
-bool getLastLine(const std::string& input, std::string& res_str)
+// FIX(Coverity): Added `inline` keyword to prevent ODR violation when this header
+// is included in multiple translation units.
+// Impact: Internal logic corrected. Public API unchanged.
+inline bool getLastLine(const std::string& input, std::string& res_str)
 {
-    string read_line = "";
+    std::string read_line = "";
     bool ret_value = false;
 
     if (!input.empty())
     {
-        stringstream read_str(input);
-        while (getline(read_str, read_line, '\n'))
+        std::stringstream read_str(input);
+        while (std::getline(read_str, read_line, '\n'))
         {
             if (!read_line.empty())
             {
