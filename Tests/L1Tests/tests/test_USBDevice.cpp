@@ -1575,6 +1575,11 @@ protected:
                 (*config_desc)->bmAttributes = LIBUSB_CONFIG_ATT_BUS_POWERED;
                 return (int)LIBUSB_SUCCESS;
             });
+
+        ON_CALL(*p_libUSBImplMock, libusb_free_config_descriptor(::testing::_))
+            .WillByDefault([](libusb_config_descriptor* config_desc) {
+                free(config_desc);
+            });
     }
 
     void SetupStringDescriptorBehavior(StringDescriptorBehavior behavior) {
@@ -1744,7 +1749,7 @@ TEST_F(USBDeviceInfoTestFixture, GetDeviceInfo_GetUSBExtInfoStruct_Success_AllDe
     EXPECT_TRUE(response.find(MOCK_USB_DEVICE_SERIAL_NO) != string::npos);
 
     string expectedResponse = 
-        R"({"parentId":0,"deviceStatus":1,"deviceLevel":0,"portNumber":1,)"
+        R"({"parentId":0,"deviceStatus":1,"deviceLevel":1,"portNumber":1,)"
         R"("vendorId":4660,"productId":22136,"protocol":0,"serialNumber":"",)"
         R"("device":{"deviceClass":8,"deviceSubclass":8,"deviceName":"100\/001","devicePath":""},)"
         R"("flags":"AVAILABLE","features":0,"busSpeed":"High","numLanguageIds":1,)"
