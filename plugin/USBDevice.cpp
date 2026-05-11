@@ -108,13 +108,20 @@ namespace WPEFramework
 
             // Stop processing:
             RPC::IRemoteConnection* connection = service->RemoteConnection(_connectionId);
-            VARIABLE_IS_NOT_USED uint32_t result = _usbDeviceImpl->Release();
+            uint32_t result = _usbDeviceImpl->Release();
 
             _usbDeviceImpl = nullptr;
 
             // It should have been the last reference we are releasing,
             // so it should endup in a DESTRUCTION_SUCCEEDED, if not we
             // are leaking...
+            // FIX(Coverity): Log release result regardless of build configuration
+            // Reason: VARIABLE_IS_NOT_USED + ASSERT means a reference count leak goes undetected in release builds
+            // Impact: Internal logic corrected. Public API unchanged.
+            if (result != Core::ERROR_DESTRUCTION_SUCCEEDED)
+            {
+                LOGERR("USBDevice implementation Release() returned %u (expected Core::ERROR_DESTRUCTION_SUCCEEDED). Possible resource leak.", result);
+            }
             ASSERT(result == Core::ERROR_DESTRUCTION_SUCCEEDED);
 
             // If this was running in a (container) process...
@@ -149,6 +156,15 @@ namespace WPEFramework
 
     void USBDevice::Deactivated(RPC::IRemoteConnection* connection)
     {
+        // FIX(Coverity): Add null guard before dereferencing connection
+        // Reason: Defensive guard against potential null connection pointer in notification callback
+        // Impact: Internal logic corrected. Public API unchanged.
+        ASSERT(nullptr != connection);
+        if (nullptr == connection)
+        {
+            LOGERR("Deactivated called with null connection pointer");
+            return;
+        }
         if (connection->Id() == _connectionId)
         {
             SYSLOG(Logging::Shutdown, (string(_T("USBDevice Deactivated"))));

@@ -25,6 +25,8 @@
 #include "tracing/Logging.h"
 #include <vector>
 #include <thread>
+#include <memory>
+#include <atomic>
 #include <fstream>
 #include <com/com.h>
 #include <core/core.h>
@@ -156,9 +158,15 @@ namespace Plugin {
 
     private:
         mutable Core::CriticalSection _adminLock;
-        std::thread *_libUSBDeviceThread;
+        // FIX(Coverity): Use std::unique_ptr to ensure RAII cleanup of thread on all paths
+        // Reason: Raw pointer could leak if exception occurs before libUSBClose is called
+        // Impact: Internal logic corrected. Public API unchanged.
+        std::unique_ptr<std::thread> _libUSBDeviceThread;
         std::list<Exchange::IUSBDevice::INotification*> _usbDeviceNotification;
-        bool _handlingUSBDeviceEvents;
+        // FIX(Coverity): Use std::atomic<bool> to eliminate data race on _handlingUSBDeviceEvents
+        // Reason: Flag is written by one thread and read by another without synchronization
+        // Impact: Internal logic corrected. Public API unchanged.
+        std::atomic<bool> _handlingUSBDeviceEvents;
         libusb_hotplug_callback_handle _hotPlugHandle[2];
 
         friend class Job;
