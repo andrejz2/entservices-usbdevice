@@ -521,10 +521,11 @@ uint32_t USBDeviceImplementation::getUSBDescriptorValue(libusb_device_handle *ha
 
             for (size_t i = USB_STRING_DESC_HEADER_LENGTH; i < bufStrLen; i+=2)
             {
-                // FIX(Coverity): Bounds check to prevent out-of-bounds read when descriptor length is odd
-                // Reason: If bufStrLen is odd, (i+1) could equal bufStrLen reaching the end of valid data
+                // FIX(Coverity): Bounds check to prevent out-of-bounds read when descriptor length is odd or lies about its length
+                // Reason: Using retValue (actual received bytes) rather than bufStrLen (self-reported) is safer
+                //         because a descriptor could lie about its length, causing bufStrLen > retValue
                 // Impact: Internal logic corrected. Public API unchanged.
-                if ((i + 1) >= bufStrLen)
+                if ((i + 1) >= static_cast<size_t>(retValue))
                 {
                     break;
                 }
@@ -598,8 +599,12 @@ uint32_t USBDeviceImplementation::getUSBExtInfoStructFromDeviceDescriptor(libusb
         // Impact: Internal logic corrected. Public API unchanged.
         if (langBuff[0] < 2)
         {
+            // FIX(Coverity): Guard against unsigned underflow; return error for invalid descriptor
+            // Reason: (uint8_t)(0 - 2) / 2 wraps to 127, causing out-of-bounds loop iterations
+            // A length < 2 means the descriptor is malformed; signal failure to the caller
+            // Impact: Internal logic corrected. Public API unchanged.
             LOGERR("Language descriptor length too short: %u", langBuff[0]);
-            status = Core::ERROR_NONE;
+            status = Core::ERROR_GENERAL;
         }
         else
         {
