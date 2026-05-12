@@ -28,7 +28,11 @@ using namespace std;
 
 namespace Utils
 {
-auto MoveFile(
+// FIX(Coverity): Multiple Definition / ODR Violation
+// Reason: Free functions defined in a header without 'inline' cause multiple-definition linker errors
+//         when the header is included in more than one translation unit.
+// Impact: Internal logic corrected. Public API unchanged.
+inline auto MoveFile(
     const string &from,
     const string &to) -> bool
 {
@@ -89,7 +93,10 @@ auto MoveFile(
 * @param[out] res_str - The last non empty line from the input string
 * @return whether or not a non empty line was found
 */
-bool getLastLine(const std::string& input, std::string& res_str)
+// FIX(Coverity): Multiple Definition / ODR Violation
+// Reason: Same ODR violation as MoveFile; marking inline prevents multiple-definition linker errors.
+// Impact: Internal logic corrected. Public API unchanged.
+inline bool getLastLine(const std::string& input, std::string& res_str)
 {
     string read_line = "";
     bool ret_value = false;

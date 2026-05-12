@@ -381,9 +381,19 @@ int USBDeviceImplementation::libUSBHotPlugCallbackDeviceAttached(libusb_context 
 
       ASSERT (nullptr != dev);
 
+      // FIX(Coverity): Null Dereference
+      // Reason: instance() may return nullptr before singleton is initialised or after destruction.
+      // Impact: Internal logic corrected. Public API unchanged.
+      USBDeviceImplementation* impl = USBDeviceImplementation::instance();
+      if (nullptr == impl)
+      {
+          LOGERR ("USBDeviceImplementation instance is null");
+          return 0;
+      }
+
       if (nullptr != dev)
       {
-          if (Core::ERROR_NONE == USBDeviceImplementation::instance()->getUSBDeviceStructFromDeviceDescriptor(dev, &usbDevice))
+          if (Core::ERROR_NONE == impl->getUSBDeviceStructFromDeviceDescriptor(dev, &usbDevice))
           {
               JsonObject params, device;
 
@@ -400,7 +410,7 @@ int USBDeviceImplementation::libUSBHotPlugCallbackDeviceAttached(libusb_context 
 			  	                       usbDevice.deviceName.c_str(),
 			  	                       usbDevice.devicePath.c_str());
 
-              USBDeviceImplementation::instance()->dispatchEvent(USBDeviceImplementation::Event::USBDEVICE_HOTPLUG_EVENT_DEVICE_ARRIVED, std::move(usbDevice));
+              impl->dispatchEvent(USBDeviceImplementation::Event::USBDEVICE_HOTPLUG_EVENT_DEVICE_ARRIVED, std::move(usbDevice));
           }
           else
           {
@@ -425,9 +435,19 @@ int USBDeviceImplementation::libUSBHotPlugCallbackDeviceDetached(libusb_context 
 
       ASSERT (nullptr != dev);
 
+      // FIX(Coverity): Null Dereference
+      // Reason: instance() may return nullptr before singleton is initialised or after destruction.
+      // Impact: Internal logic corrected. Public API unchanged.
+      USBDeviceImplementation* impl = USBDeviceImplementation::instance();
+      if (nullptr == impl)
+      {
+          LOGERR ("USBDeviceImplementation instance is null");
+          return 0;
+      }
+
       if (nullptr != dev)
       {
-          if (Core::ERROR_NONE == USBDeviceImplementation::instance()->getUSBDeviceStructFromDeviceDescriptor(dev, &usbDevice))
+          if (Core::ERROR_NONE == impl->getUSBDeviceStructFromDeviceDescriptor(dev, &usbDevice))
           {
               LOGINFO ("usbDevice.deviceClass: %u usbDevice.deviceSubclass:%u usbDevice.deviceName:%s devicePath:%s", 
 			  	                       usbDevice.deviceClass,
@@ -435,7 +455,7 @@ int USBDeviceImplementation::libUSBHotPlugCallbackDeviceDetached(libusb_context 
 			  	                       usbDevice.deviceName.c_str(),
 			  	                       usbDevice.devicePath.c_str());
 
-              USBDeviceImplementation::instance()->dispatchEvent(USBDeviceImplementation::Event::USBDEVICE_HOTPLUG_EVENT_DEVICE_LEFT, std::move(usbDevice));
+              impl->dispatchEvent(USBDeviceImplementation::Event::USBDEVICE_HOTPLUG_EVENT_DEVICE_LEFT, std::move(usbDevice));
           }
           else
           {
@@ -465,7 +485,16 @@ void USBDeviceImplementation::getDeviceSerialNumber(const string& sysfsPath, str
 {
     char path[256] = {0};
 
-    std::snprintf(path, sizeof(path), "%s/%s/serial", PLUGIN_USBDEVICE_PATH, sysfsPath.c_str());
+    // FIX(Coverity): Buffer Overflow Risk
+    // Reason: snprintf into a fixed-size buffer may silently truncate if the path is too long.
+    //         Check the return value and log a warning on truncation.
+    // Impact: Internal logic corrected. Public API unchanged.
+    int written = std::snprintf(path, sizeof(path), "%s/%s/serial", PLUGIN_USBDEVICE_PATH, sysfsPath.c_str());
+    if (written < 0 || static_cast<size_t>(written) >= sizeof(path))
+    {
+        LOGERR("Path truncation detected for sysfsPath: %s", sysfsPath.c_str());
+        return;
+    }
 
     string filePath = path;
 
@@ -580,13 +609,17 @@ uint32_t USBDeviceImplementation::getUSBDescriptorValue(libusb_device_handle *ha
             if (retValue < 0) 
             {
                 LOGERR("libusb_get_string_descriptor_ascii failed: %s", libusb_strerror((enum libusb_error)retValue));
+                // FIX(Coverity): Incorrect Error Handling
+                // Reason: The original LOGERR for the first descriptor failure was placed outside this block,
+                //         causing it to fire even when the ASCII fallback succeeded.
+                // Impact: Internal logic corrected. Public API unchanged.
+                LOGERR("languageID: %u, libusb_get_string_descriptor failed: %s", languageID, libusb_strerror((enum libusb_error)retValue));
             }
             else
             {
                 stringDescriptor = string(reinterpret_cast<char*>(descBuf));
                 status = Core::ERROR_NONE;
             }
-            LOGERR("languageID: %u, libusb_get_string_descriptor failed: %s", languageID, libusb_strerror((enum libusb_error)retValue));
         }
         else if (descBuf[1] != LIBUSB_DT_STRING)
         {
@@ -646,7 +679,10 @@ uint32_t USBDeviceImplementation::getUSBExtInfoStructFromDeviceDescriptor(libusb
     {
         LOGERR ("Error libusb_open: %s", libusb_strerror((enum libusb_error)retValue));
     }
-    else if (4 < (retValue = libusb_get_string_descriptor(devHandle, 0, 0, (unsigned char*)langBuff, sizeof(langBuff))))
+    // FIX(Coverity): Logic Defect
+    // Reason: '4 <' rejects a valid 4-byte response encoding exactly 1 language ID (2-byte header + 2-byte code).
+    // Impact: Internal logic corrected. Public API unchanged.
+    else if (4 <= (retValue = libusb_get_string_descriptor(devHandle, 0, 0, (unsigned char*)langBuff, sizeof(langBuff))))
     {
         LOGINFO("SerialNumber:%d,Manufacturer:%d,Product:%d", pDesc->iSerialNumber,pDesc->iManufacturer,pDesc->iProduct);
         if (Core::ERROR_NONE != (status = getUSBDescriptorValue(devHandle, 0, pDesc->iManufacturer, pUSBDeviceInfo->productInfo1.manufacturer)))
@@ -661,7 +697,9 @@ uint32_t USBDeviceImplementation::getUSBExtInfoStructFromDeviceDescriptor(libusb
     {
             LOGERR ("Error getUSBDescriptorValue: %s", libusb_strerror((enum libusb_error)retValue));
         }
-        LOGERR ("Error libusb_get_string_descriptor: %s", libusb_strerror((enum libusb_error)retValue));
+        // FIX(Coverity): Incorrect Error Handling
+        // Reason: LOGERR was placed inside the success branch, incorrectly logging an error on every successful path.
+        // Impact: Internal logic corrected. Public API unchanged.
     }
     else
     {
@@ -805,7 +843,9 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
             }
             else
             {
-                string serialNumber;
+                // FIX(Coverity): Dead Code
+                // Reason: 'string serialNumber' was declared but never used; serial number is written to pUSBDeviceInfo->serialNumber directly.
+                // Impact: Internal logic corrected. Public API unchanged.
 
                 /* Getting the device path and device serialNumber */
                 getDevicePathFromDevice(pDev, pUSBDeviceInfo->device.devicePath, pUSBDeviceInfo->serialNumber);
@@ -829,6 +869,11 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
                     pUSBDeviceInfo->deviceStatus = WPEFramework::Exchange::IUSBDevice::USBDeviceStatus::DEVICE_STATUS_ACTIVE;
                 }
                 LOGINFO("bmAttributes: %u",config_desc->bmAttributes);
+                // FIX(Coverity): Resource Leak
+                // Reason: libusb_get_active_config_descriptor allocates config_desc but it was never freed.
+                // Impact: Internal logic corrected. Public API unchanged.
+                libusb_free_config_descriptor(config_desc);
+                config_desc = nullptr;
             }
             else
             {
@@ -1056,6 +1101,11 @@ Core::hresult USBDeviceImplementation::GetDeviceList(IUSBDeviceIterator*& device
     std::list<Exchange::IUSBDevice::USBDevice> usbDeviceList;
     libusb_device **devs = nullptr;
     ssize_t devCount = 0;
+    // FIX(Coverity): Logic Defect
+    // Reason: 'status' reflected only the last device iteration. Use a separate flag to
+    //         track whether at least one device was processed successfully.
+    // Impact: Internal logic corrected. Public API unchanged.
+    bool anyDeviceSucceeded = false;
 
     LOGINFO("GetDeviceList");
 
@@ -1080,6 +1130,7 @@ Core::hresult USBDeviceImplementation::GetDeviceList(IUSBDeviceIterator*& device
                                        usbDevice.devicePath.c_str());
 
                 usbDeviceList.emplace_back(usbDevice);
+                anyDeviceSucceeded = true;
             }
           else
             {
@@ -1088,9 +1139,10 @@ Core::hresult USBDeviceImplementation::GetDeviceList(IUSBDeviceIterator*& device
         }
 
         libusb_free_device_list(devs, 1);
-        if (Core::ERROR_NONE == status)
+        if (anyDeviceSucceeded)
         {
             devices = (Core::Service<RPC::IteratorType<Exchange::IUSBDevice::IUSBDeviceIterator>>::Create<Exchange::IUSBDevice::IUSBDeviceIterator>(usbDeviceList));
+            status = Core::ERROR_NONE;
         }
     }
     else

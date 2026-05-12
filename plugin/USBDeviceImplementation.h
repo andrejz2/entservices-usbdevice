@@ -25,6 +25,7 @@
 #include "tracing/Logging.h"
 #include <vector>
 #include <thread>
+#include <atomic>
 #include <fstream>
 #include <com/com.h>
 #include <core/core.h>
@@ -161,7 +162,10 @@ namespace Plugin {
         mutable Core::CriticalSection _adminLock;
         std::thread *_libUSBDeviceThread;
         std::list<Exchange::IUSBDevice::INotification*> _usbDeviceNotification;
-        bool _handlingUSBDeviceEvents;
+        // FIX(Coverity): Concurrency Race Condition
+        // Reason: bool written on main thread and read in event thread without synchronisation.
+        // Impact: Internal logic corrected. Public API unchanged.
+        std::atomic<bool> _handlingUSBDeviceEvents;
         libusb_hotplug_callback_handle _hotPlugHandle[2];
 
         friend class Job;
