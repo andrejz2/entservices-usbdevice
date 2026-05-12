@@ -483,20 +483,11 @@ int USBDeviceImplementation::libUSBHotPlugCallbackDeviceDetached(libusb_context 
 //                        Empty string if the file does not exist or the device has no serial number.
 void USBDeviceImplementation::getDeviceSerialNumber(const string& sysfsPath, string& serialNumber)
 {
-    char path[256] = {0};
-
     // FIX(Coverity): Buffer Overflow Risk
-    // Reason: snprintf into a fixed-size buffer may silently truncate if the path is too long.
-    //         Check the return value and log a warning on truncation.
+    // Reason: Fixed-size snprintf buffer could silently truncate long paths.
+    //         Use std::string concatenation to eliminate buffer size concerns entirely.
     // Impact: Internal logic corrected. Public API unchanged.
-    int written = std::snprintf(path, sizeof(path), "%s/%s/serial", PLUGIN_USBDEVICE_PATH, sysfsPath.c_str());
-    if (written < 0 || static_cast<size_t>(written) >= sizeof(path))
-    {
-        LOGERR("Path truncation detected for sysfsPath: %s", sysfsPath.c_str());
-        return;
-    }
-
-    string filePath = path;
+    const string filePath = string(PLUGIN_USBDEVICE_PATH) + "/" + sysfsPath + "/serial";
 
     if (!filePath.empty())
     {
@@ -873,7 +864,6 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
                 // Reason: libusb_get_active_config_descriptor allocates config_desc but it was never freed.
                 // Impact: Internal logic corrected. Public API unchanged.
                 libusb_free_config_descriptor(config_desc);
-                config_desc = nullptr;
             }
             else
             {
