@@ -313,16 +313,18 @@ uint32_t USBDeviceImplementation::libUSBInit(void)
     {
         _handlingUSBDeviceEvents = true;
 
-        _libUSBDeviceThread = new std::thread(&USBDeviceImplementation::libUSBEventsHandlingThread, USBDeviceImplementation::instance());
-
-        if (nullptr != _libUSBDeviceThread)
+        // FIX(Issue 10): Dead code
+        // Reason: 'new' either returns a valid non-null pointer or throws std::bad_alloc; the nullptr check afterward is unreachable dead code.
+        // Impact: The try/catch correctly handles std::bad_alloc, preventing silent failure; dead nullptr branch is removed.
+        try
         {
+            _libUSBDeviceThread = new std::thread(&USBDeviceImplementation::libUSBEventsHandlingThread, USBDeviceImplementation::instance());
             LOGINFO("libUSBInit Successed");
             status = Core::ERROR_NONE;
         }
-        else
+        catch (const std::bad_alloc& e)
         {
-            LOGERR("libUSBEventsHandlingThread Failed");
+            LOGERR("libUSBEventsHandlingThread Failed: %s", e.what());
             _handlingUSBDeviceEvents = false;
         }
     }
@@ -383,7 +385,16 @@ int USBDeviceImplementation::libUSBHotPlugCallbackDeviceAttached(libusb_context 
 
       if (nullptr != dev)
       {
-          if (Core::ERROR_NONE == USBDeviceImplementation::instance()->getUSBDeviceStructFromDeviceDescriptor(dev, &usbDevice))
+          // FIX(Issue 9): Null dereferences
+          // Reason: USBDeviceImplementation::instance() can return nullptr if called before initialization or after destruction.
+          // Impact: Prevents a null pointer dereference crash in the libusb hotplug callback thread.
+          USBDeviceImplementation* impl = USBDeviceImplementation::instance();
+          if (nullptr == impl)
+          {
+              LOGERR ("USBDeviceImplementation instance is null");
+              return 0;
+          }
+          if (Core::ERROR_NONE == impl->getUSBDeviceStructFromDeviceDescriptor(dev, &usbDevice))
           {
               JsonObject params, device;
 
@@ -400,7 +411,7 @@ int USBDeviceImplementation::libUSBHotPlugCallbackDeviceAttached(libusb_context 
 			  	                       usbDevice.deviceName.c_str(),
 			  	                       usbDevice.devicePath.c_str());
 
-              USBDeviceImplementation::instance()->dispatchEvent(USBDeviceImplementation::Event::USBDEVICE_HOTPLUG_EVENT_DEVICE_ARRIVED, std::move(usbDevice));
+              impl->dispatchEvent(USBDeviceImplementation::Event::USBDEVICE_HOTPLUG_EVENT_DEVICE_ARRIVED, std::move(usbDevice));
           }
           else
           {
@@ -427,7 +438,16 @@ int USBDeviceImplementation::libUSBHotPlugCallbackDeviceDetached(libusb_context 
 
       if (nullptr != dev)
       {
-          if (Core::ERROR_NONE == USBDeviceImplementation::instance()->getUSBDeviceStructFromDeviceDescriptor(dev, &usbDevice))
+          // FIX(Issue 9): Null dereferences
+          // Reason: USBDeviceImplementation::instance() can return nullptr if called before initialization or after destruction.
+          // Impact: Prevents a null pointer dereference crash in the libusb hotplug callback thread.
+          USBDeviceImplementation* impl = USBDeviceImplementation::instance();
+          if (nullptr == impl)
+          {
+              LOGERR ("USBDeviceImplementation instance is null");
+              return 0;
+          }
+          if (Core::ERROR_NONE == impl->getUSBDeviceStructFromDeviceDescriptor(dev, &usbDevice))
           {
               LOGINFO ("usbDevice.deviceClass: %u usbDevice.deviceSubclass:%u usbDevice.deviceName:%s devicePath:%s", 
 			  	                       usbDevice.deviceClass,
@@ -435,7 +455,7 @@ int USBDeviceImplementation::libUSBHotPlugCallbackDeviceDetached(libusb_context 
 			  	                       usbDevice.deviceName.c_str(),
 			  	                       usbDevice.devicePath.c_str());
 
-              USBDeviceImplementation::instance()->dispatchEvent(USBDeviceImplementation::Event::USBDEVICE_HOTPLUG_EVENT_DEVICE_LEFT, std::move(usbDevice));
+              impl->dispatchEvent(USBDeviceImplementation::Event::USBDEVICE_HOTPLUG_EVENT_DEVICE_LEFT, std::move(usbDevice));
           }
           else
           {
@@ -576,6 +596,12 @@ uint32_t USBDeviceImplementation::getUSBDescriptorValue(libusb_device_handle *ha
         retValue = libusb_get_string_descriptor(handle, descriptorIndex, languageID, descBuf, sizeof(descBuf));
         if (retValue < 0)
         {
+            // FIX(Issue 6): Incorrect error handling
+            // Reason: The LOGERR for libusb_get_string_descriptor failure was placed after the ASCII fallback block,
+            //         causing it to fire even when the ASCII fallback succeeded and status was set to ERROR_NONE.
+            // Impact: Error is now only logged when the primary descriptor fetch fails (before the ASCII fallback attempt),
+            //         preventing false error logs on successful ASCII fallback paths.
+            LOGERR("languageID: %u, libusb_get_string_descriptor failed: %s", languageID, libusb_strerror((enum libusb_error)retValue));
             retValue = libusb_get_string_descriptor_ascii(handle, descriptorIndex, descBuf, sizeof(descBuf));
             if (retValue < 0) 
             {
@@ -586,7 +612,6 @@ uint32_t USBDeviceImplementation::getUSBDescriptorValue(libusb_device_handle *ha
                 stringDescriptor = string(reinterpret_cast<char*>(descBuf));
                 status = Core::ERROR_NONE;
             }
-            LOGERR("languageID: %u, libusb_get_string_descriptor failed: %s", languageID, libusb_strerror((enum libusb_error)retValue));
         }
         else if (descBuf[1] != LIBUSB_DT_STRING)
         {
@@ -661,7 +686,10 @@ uint32_t USBDeviceImplementation::getUSBExtInfoStructFromDeviceDescriptor(libusb
     {
             LOGERR ("Error getUSBDescriptorValue: %s", libusb_strerror((enum libusb_error)retValue));
         }
-        LOGERR ("Error libusb_get_string_descriptor: %s", libusb_strerror((enum libusb_error)retValue));
+        // FIX(Issue 7): Incorrect error handling
+        // Reason: LOGERR was placed unconditionally at the end of the languageID=0 fallback block,
+        //         logging a false error even when all descriptor reads above succeeded.
+        // Impact: Error is no longer falsely reported when the fallback path completes without errors.
     }
     else
     {
@@ -790,7 +818,10 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
 
 
 
-            sprintf(deviceName, "%03d/%03d", libusb_get_bus_number(pDev), libusb_get_device_address(pDev));
+            // FIX(Issue 1): Buffer overflows / bounds violations
+            // Reason: sprintf has no bounds checking; snprintf enforces the buffer limit.
+            // Impact: Prevents potential buffer overflow if device numbers are unexpectedly large; safe pattern for fixed buffers.
+            snprintf(deviceName, sizeof(deviceName), "%03d/%03d", libusb_get_bus_number(pDev), libusb_get_device_address(pDev));
             pUSBDeviceInfo->device.deviceName = std::string(deviceName);
 
             if (LIBUSB_CLASS_PER_INTERFACE == desc.bDeviceClass)
@@ -829,6 +860,11 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
                     pUSBDeviceInfo->deviceStatus = WPEFramework::Exchange::IUSBDevice::USBDeviceStatus::DEVICE_STATUS_ACTIVE;
                 }
                 LOGINFO("bmAttributes: %u",config_desc->bmAttributes);
+                // FIX(Issue 5): Resource leaks
+                // Reason: libusb_get_active_config_descriptor allocates config_desc and must be freed to avoid a resource leak.
+                // Impact: Prevents memory leak each time GetDeviceInfo is called for a device with an active config descriptor.
+                libusb_free_config_descriptor(config_desc);
+                config_desc = nullptr;
             }
             else
             {
@@ -1122,7 +1158,10 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 2): Buffer overflows / bounds violations
+            // Reason: sprintf has no bounds checking; snprintf enforces the buffer limit.
+            // Impact: Prevents potential buffer overflow; safe pattern for fixed buffers.
+            (void)snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {
@@ -1133,7 +1172,11 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
                 uint8_t portPath[8] = {0}; // Maximum 8 levels (depends on USB architecture)
 
                 status = USBDeviceImplementation::instance()->getUSBDeviceInfoStructFromDeviceDescriptor(devs[index], &deviceInfo);
-                if (Core::ERROR_NONE != status)
+                // FIX(Issue 8): Logic defects
+                // Reason: The original code ran the deviceLevel/parentId logic on failure and logged a warning on success.
+                //         The success/failure condition was inverted.
+                // Impact: deviceLevel and parentId are now correctly populated only when the descriptor call succeeds.
+                if (Core::ERROR_NONE == status)
                 {
                     deviceInfo.deviceLevel = libusb_get_port_numbers(devs[index], portPath, sizeof(portPath));
                     if ( 1 < deviceInfo.deviceLevel )
@@ -1192,11 +1235,14 @@ Core::hresult USBDeviceImplementation::BindDriver(const string &deviceName) cons
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 2): Buffer overflows / bounds violations
+            // Reason: sprintf has no bounds checking; snprintf enforces the buffer limit.
+            // Impact: Prevents potential buffer overflow; safe pattern for fixed buffers.
+            (void)snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {
-                continue; /*Not matched continue to check next dev struct */
+                continue;
             }
             else
             {
@@ -1277,7 +1323,10 @@ Core::hresult USBDeviceImplementation::UnbindDriver(const string &deviceName) co
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 4): Buffer overflows / bounds violations
+            // Reason: sprintf has no bounds checking; snprintf enforces the buffer limit.
+            // Impact: Prevents potential buffer overflow; safe pattern for fixed buffers.
+            (void)snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {

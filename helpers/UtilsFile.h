@@ -52,7 +52,10 @@ auto MoveFile(
 
         do {
             auto len = fileFrom.Read(buffer, bufLen);
-            if (len <= 0) {
+            // FIX(Issue 11): Logic defects
+            // Reason: Read() returns uint32_t (unsigned); comparing with <= 0 makes the negative branch unreachable dead code.
+            // Impact: Clarifies intent; only the == 0 case (no bytes read) correctly terminates the loop.
+            if (len == 0) {
                 break;
             }
 
@@ -60,7 +63,10 @@ auto MoveFile(
 
             do {
                 auto count = fileTo.Write(ptr, len);
-                if (count <= 0) {
+                // FIX(Issue 12): Logic defects
+                // Reason: Write() returns uint32_t (unsigned); comparing with <= 0 makes the negative branch unreachable dead code.
+                // Impact: Clarifies intent; only the == 0 case (zero bytes written) correctly signals a write failure.
+                if (count == 0) {
                     result = false;
                     break;
                 }
