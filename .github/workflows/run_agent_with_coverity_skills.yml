@@ -93,7 +93,7 @@ jobs:
 
       - name: Assign issue to generic Copilot agent
         env:
-          GH_TOKEN: ${{ secrets.ASSIGN_COPILOT_ISSUE_PAT }}
+          GH_TOKEN: ${{ secrets.ASSIGN_COPILOT_ISSUE_PAT_andrejz2 }}
           REPO: ${{ github.repository }}
           ISSUE_URL: ${{ steps.create_issue.outputs.issue_url }}
         run: |
