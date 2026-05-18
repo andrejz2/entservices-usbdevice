@@ -49,6 +49,7 @@ jobs:
             echo "4. After scan prerequisites are satisfied, run the coverity-fix skill and implement code fixes based on CSV recommendations."
             echo "5. Commit all remediation changes to the same branch."
             echo "6. Update the same pull request with remediation commits and a concise summary of what was fixed."
+            echo "7. Create a comment on this issue, with the comment containing the created CSV analysis report of the scan results and resolution notes."
             echo
             echo "Constraints:"
             echo "- Use only repository-defined skills and instructions."

@@ -116,11 +116,12 @@ The CSV already contains the canonical `Component Name` and `File Path` columns.
      - Creating automation scripts or external tooling
 
   8. **PUSH CHANGES AND CREATE PR**
-     1. Commit all fixes to the branch with message: `"Fix Coverity issues - [N] issues resolved"`
-     2. Create a Pull Request from the branch to `develop`
-     3. PR Title: `"Coverity Analysis and Fix - {N} issues resolved"`
-     4. PR Body must include:
+     1. If a Github issue was specified by the user's initial request, create a comment on the Github issue that contains the analysis and resolution .csv. Otherwise, proceed to step 2.
+     2. Commit all fixes to the analysis branch with message: `"Fix Coverity issues - [N] issues resolved"`
+     3. Create a Pull Request from analysis branch to `develop`
+     4. PR Title: `"Coverity Analysis and Fix - {N} issues resolved"`
+     5. PR Body should include:
         - Summary of components fixed
         - Count of issues resolved vs false positives
-        - Link to the related analysis branch
-     5. Announce PR creation and await final review
+        - Link to related analysis branch
+     6. Announce PR creation and await final review
