@@ -1133,7 +1133,10 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
                 uint8_t portPath[8] = {0}; // Maximum 8 levels (depends on USB architecture)
 
                 status = USBDeviceImplementation::instance()->getUSBDeviceInfoStructFromDeviceDescriptor(devs[index], &deviceInfo);
-                if (Core::ERROR_NONE != status)
+                // FIX(Issue 6): Logic defects
+                // Reason: The success/failure condition was inverted, causing metadata enrichment on failure.
+                // Impact: Parent/device-level fields are now populated only on successful descriptor parsing.
+                if (Core::ERROR_NONE == status)
                 {
                     deviceInfo.deviceLevel = libusb_get_port_numbers(devs[index], portPath, sizeof(portPath));
                     if ( 1 < deviceInfo.deviceLevel )
