@@ -1,0 +1,7 @@
+Row ID Number,Component Name,File Path,Line Number,Source Code Snippet,Issue Type,Severity,Issue Description,Suggested Fix
+1,.github,.github,,,,,No issues found,
+2,Tests,Tests/L1Tests/tests/test_USBDevice.cpp,,,,,No issues found,
+3,build_tools_workflows,build_tools_workflows,,,,,No issues found,
+4,cov_docker_script,cov_docker_script,,,,,No issues found,
+5,helpers,helpers/PluginInterfaceBuilder.h,,,,,No issues found,
+6,plugin,plugin/USBDeviceImplementation.cpp,1136-1158,"if (Core::ERROR_NONE != status) { deviceInfo.deviceLevel = libusb_get_port_numbers(devs[index], portPath, sizeof(portPath)); ... } else { LOGWARN(""getUSBDeviceInfoStructFromDeviceDescriptor Failed""); }",Logic defects,High,Success and failure paths are inverted in GetDeviceInfo so parent/device-level metadata is populated only when descriptor parsing fails and a failure log is emitted on success.,Invert the condition to execute parent/device-level enrichment only when status is Core::ERROR_NONE and log failure only in the error branch.
