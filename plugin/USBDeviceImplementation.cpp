@@ -819,6 +819,9 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
 
             if (LIBUSB_SUCCESS == (retValue = libusb_get_active_config_descriptor ( pDev, &config_desc )))
             {
+                // FIX(Issue 8): Resource leaks
+                // Reason: The configuration descriptor allocated by libusb must be explicitly released.
+                // Impact: Ensures repeated device info queries do not leak descriptor allocations.
                 if (config_desc->bmAttributes & LIBUSB_CONFIG_ATT_SELF_POWERED )
                 {
                     pUSBDeviceInfo->deviceStatus = WPEFramework::Exchange::IUSBDevice::USBDeviceStatus::DEVICE_STATUS_SELF_POWERED | \
@@ -829,6 +832,7 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
                     pUSBDeviceInfo->deviceStatus = WPEFramework::Exchange::IUSBDevice::USBDeviceStatus::DEVICE_STATUS_ACTIVE;
                 }
                 LOGINFO("bmAttributes: %u",config_desc->bmAttributes);
+                libusb_free_config_descriptor(config_desc);
             }
             else
             {
@@ -1133,7 +1137,10 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
                 uint8_t portPath[8] = {0}; // Maximum 8 levels (depends on USB architecture)
 
                 status = USBDeviceImplementation::instance()->getUSBDeviceInfoStructFromDeviceDescriptor(devs[index], &deviceInfo);
-                if (Core::ERROR_NONE != status)
+                // FIX(Issue 9): Logic defects
+                // Reason: The success condition was inverted, executing fallback logic on failures.
+                // Impact: Parent topology is now computed only after successful device info retrieval.
+                if (Core::ERROR_NONE == status)
                 {
                     deviceInfo.deviceLevel = libusb_get_port_numbers(devs[index], portPath, sizeof(portPath));
                     if ( 1 < deviceInfo.deviceLevel )

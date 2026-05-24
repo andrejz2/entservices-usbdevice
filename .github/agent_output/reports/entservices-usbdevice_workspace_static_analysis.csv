@@ -1,10 +1,10 @@
-Row ID Number,Component Name,File Path,Line Number,Source Code Snippet,Issue Type,Severity,Issue Description,Suggested Fix
-1,.github,.github,,,,,No issues found,
-2,Tests,Tests,,,,,No issues found,
-3,build-baseline,build-baseline,,,,,No issues found,
-4,build_tools_workflows,build_tools_workflows,,,,,No issues found,
-5,cov_docker_script,cov_docker_script,,,,,No issues found,
-6,helpers,helpers,,,,,No issues found,
-7,plugin,plugin/USBDevice.cpp,152,"if (connection->Id() == _connectionId)",Null dereferences,High,The deactivation callback dereferences connection without a null check which can crash if framework passes a null remote connection.,Guard the pointer before dereferencing and return early when it is null.
-8,plugin,plugin/USBDeviceImplementation.cpp,820-833,"if (LIBUSB_SUCCESS == (retValue = libusb_get_active_config_descriptor ( pDev, &config_desc )))",Resource leaks,Medium,The active configuration descriptor is acquired but never released causing a leak on repeated calls.,Call libusb_free_config_descriptor(config_desc) after the descriptor is consumed.
-9,plugin,plugin/USBDeviceImplementation.cpp,1136-1158,"if (Core::ERROR_NONE != status) { ... } else { LOGWARN (""getUSBDeviceInfoStructFromDeviceDescriptor Failed""); }",Logic defects,High,Success and failure handling are inverted so valid device info goes into the failure path and parent data may be computed on error.,Change the condition to compare for success and keep warning only on failure.
+Row ID Number,Component Name,File Path,Line Number,Source Code Snippet,Issue Type,Severity,Issue Description,Suggested Fix,Resolution Status and Notes
+1,.github,.github,,,,,No issues found,,No issues found
+2,Tests,Tests,,,,,No issues found,,No issues found
+3,build-baseline,build-baseline,,,,,No issues found,,No issues found
+4,build_tools_workflows,build_tools_workflows,,,,,No issues found,,No issues found
+5,cov_docker_script,cov_docker_script,,,,,No issues found,,No issues found
+6,helpers,helpers,,,,,No issues found,,No issues found
+7,plugin,plugin/USBDevice.cpp,152,"if (connection->Id() == _connectionId)",Null dereferences,High,The deactivation callback dereferences connection without a null check which can crash if framework passes a null remote connection.,Guard the pointer before dereferencing and return early when it is null.,Resolved - Added null guard and early return in Deactivated callback.
+8,plugin,plugin/USBDeviceImplementation.cpp,820-833,"if (LIBUSB_SUCCESS == (retValue = libusb_get_active_config_descriptor ( pDev, &config_desc )))",Resource leaks,Medium,The active configuration descriptor is acquired but never released causing a leak on repeated calls.,Call libusb_free_config_descriptor(config_desc) after the descriptor is consumed.,Resolved - Freed config descriptor after reading active attributes.
+9,plugin,plugin/USBDeviceImplementation.cpp,1136-1158,"if (Core::ERROR_NONE != status) { ... } else { LOGWARN (""getUSBDeviceInfoStructFromDeviceDescriptor Failed""); }",Logic defects,High,Success and failure handling are inverted so valid device info goes into the failure path and parent data may be computed on error.,Change the condition to compare for success and keep warning only on failure.,Resolved - Corrected success/failure branch condition for GetDeviceInfo.
