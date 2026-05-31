@@ -793,7 +793,8 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
             // FIX(Issue 6): API misuse
             // Reason: Avoid unbounded formatting APIs on fixed-size stack buffers.
             // Impact: Uses bounded formatting to prevent overflow if format usage changes.
-            if (std::snprintf(deviceName, sizeof(deviceName), "%03d/%03d", libusb_get_bus_number(pDev), libusb_get_device_address(pDev)) < 0)
+            const int formattedDeviceNameLength = std::snprintf(deviceName, sizeof(deviceName), "%03d/%03d", libusb_get_bus_number(pDev), libusb_get_device_address(pDev));
+            if ((formattedDeviceNameLength < 0) || (static_cast<size_t>(formattedDeviceNameLength) >= sizeof(deviceName)))
             {
                 LOGERR("Failed to format USB device name");
                 pUSBDeviceInfo->device.deviceName.clear();
@@ -1135,7 +1136,8 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
             // FIX(Issue 6): API misuse
             // Reason: Avoid unbounded formatting APIs on fixed-size stack buffers.
             // Impact: Bounds-safe formatting prevents overflow hazards.
-            if (std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index])) < 0)
+            const int formattedDeviceNameLength = std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            if ((formattedDeviceNameLength < 0) || (static_cast<size_t>(formattedDeviceNameLength) >= sizeof(usbDeviceName)))
             {
                 LOGERR("Failed to format USB device name");
                 continue;
@@ -1215,7 +1217,8 @@ Core::hresult USBDeviceImplementation::BindDriver(const string &deviceName) cons
             // FIX(Issue 6): API misuse
             // Reason: Avoid unbounded formatting APIs on fixed-size stack buffers.
             // Impact: Bounds-safe formatting prevents overflow hazards.
-            if (std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index])) < 0)
+            const int formattedDeviceNameLength = std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            if ((formattedDeviceNameLength < 0) || (static_cast<size_t>(formattedDeviceNameLength) >= sizeof(usbDeviceName)))
             {
                 LOGERR("Failed to format USB device name");
                 continue;
@@ -1307,7 +1310,8 @@ Core::hresult USBDeviceImplementation::UnbindDriver(const string &deviceName) co
             // FIX(Issue 6): API misuse
             // Reason: Avoid unbounded formatting APIs on fixed-size stack buffers.
             // Impact: Bounds-safe formatting prevents overflow hazards.
-            if (std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index])) < 0)
+            const int formattedDeviceNameLength = std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            if ((formattedDeviceNameLength < 0) || (static_cast<size_t>(formattedDeviceNameLength) >= sizeof(usbDeviceName)))
             {
                 LOGERR("Failed to format USB device name");
                 continue;
