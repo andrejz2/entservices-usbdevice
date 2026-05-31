@@ -796,8 +796,12 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
             if (std::snprintf(deviceName, sizeof(deviceName), "%03d/%03d", libusb_get_bus_number(pDev), libusb_get_device_address(pDev)) < 0)
             {
                 LOGERR("Failed to format USB device name");
+                pUSBDeviceInfo->device.deviceName.clear();
             }
-            pUSBDeviceInfo->device.deviceName = std::string(deviceName);
+            else
+            {
+                pUSBDeviceInfo->device.deviceName = std::string(deviceName);
+            }
 
             if (LIBUSB_CLASS_PER_INTERFACE == desc.bDeviceClass)
             {
