@@ -790,7 +790,13 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
 
 
 
-            sprintf(deviceName, "%03d/%03d", libusb_get_bus_number(pDev), libusb_get_device_address(pDev));
+            // FIX(Issue 6): API misuse
+            // Reason: Avoid unbounded formatting APIs on fixed-size stack buffers.
+            // Impact: Uses bounded formatting to prevent overflow if format usage changes.
+            if (std::snprintf(deviceName, sizeof(deviceName), "%03d/%03d", libusb_get_bus_number(pDev), libusb_get_device_address(pDev)) < 0)
+            {
+                LOGERR("Failed to format USB device name");
+            }
             pUSBDeviceInfo->device.deviceName = std::string(deviceName);
 
             if (LIBUSB_CLASS_PER_INTERFACE == desc.bDeviceClass)
@@ -1122,7 +1128,14 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 6): API misuse
+            // Reason: Avoid unbounded formatting APIs on fixed-size stack buffers.
+            // Impact: Bounds-safe formatting prevents overflow hazards.
+            if (std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index])) < 0)
+            {
+                LOGERR("Failed to format USB device name");
+                continue;
+            }
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {
@@ -1133,7 +1146,10 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
                 uint8_t portPath[8] = {0}; // Maximum 8 levels (depends on USB architecture)
 
                 status = USBDeviceImplementation::instance()->getUSBDeviceInfoStructFromDeviceDescriptor(devs[index], &deviceInfo);
-                if (Core::ERROR_NONE != status)
+                // FIX(Issue 7): Logic defects
+                // Reason: Parent hierarchy fields should be filled only when descriptor lookup succeeds.
+                // Impact: Corrects success/failure branching to avoid incorrect metadata and false failure logging.
+                if (Core::ERROR_NONE == status)
                 {
                     deviceInfo.deviceLevel = libusb_get_port_numbers(devs[index], portPath, sizeof(portPath));
                     if ( 1 < deviceInfo.deviceLevel )
@@ -1192,7 +1208,14 @@ Core::hresult USBDeviceImplementation::BindDriver(const string &deviceName) cons
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 6): API misuse
+            // Reason: Avoid unbounded formatting APIs on fixed-size stack buffers.
+            // Impact: Bounds-safe formatting prevents overflow hazards.
+            if (std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index])) < 0)
+            {
+                LOGERR("Failed to format USB device name");
+                continue;
+            }
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {
@@ -1277,7 +1300,14 @@ Core::hresult USBDeviceImplementation::UnbindDriver(const string &deviceName) co
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 6): API misuse
+            // Reason: Avoid unbounded formatting APIs on fixed-size stack buffers.
+            // Impact: Bounds-safe formatting prevents overflow hazards.
+            if (std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index])) < 0)
+            {
+                LOGERR("Failed to format USB device name");
+                continue;
+            }
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {
