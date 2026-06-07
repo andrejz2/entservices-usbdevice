@@ -67,8 +67,14 @@ namespace Plugin {
         PluginInterfaceRef& operator=(PluginInterfaceRef&& other)
         {
             if (this != &other) {
+                // FIX(Issue 2): Incorrect lifetime handling
+                // Reason: Move-assignment must release any currently held interface and move both paired members.
+                // Impact: Prevents leaking the previously held interface and keeps controller/interface state consistent after moves.
+                Reset();
                 _interface = other._interface;
+                _service = other._service;
                 other._interface = nullptr;
+                other._service = nullptr;
             }
             return *this;
         }

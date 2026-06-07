@@ -829,6 +829,10 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
                     pUSBDeviceInfo->deviceStatus = WPEFramework::Exchange::IUSBDevice::USBDeviceStatus::DEVICE_STATUS_ACTIVE;
                 }
                 LOGINFO("bmAttributes: %u",config_desc->bmAttributes);
+                // FIX(Issue 4): Resource leaks
+                // Reason: The libusb configuration descriptor must be released after its attributes are consumed.
+                // Impact: Prevents GetDeviceInfo from leaking one libusb descriptor per successful query.
+                libusb_free_config_descriptor(config_desc);
             }
             else
             {
@@ -1133,7 +1137,10 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
                 uint8_t portPath[8] = {0}; // Maximum 8 levels (depends on USB architecture)
 
                 status = USBDeviceImplementation::instance()->getUSBDeviceInfoStructFromDeviceDescriptor(devs[index], &deviceInfo);
-                if (Core::ERROR_NONE != status)
+                // FIX(Issue 5): Logic defects
+                // Reason: Parent traversal is only valid after deviceInfo has been populated successfully.
+                // Impact: Ensures successful GetDeviceInfo calls compute parentId/deviceLevel instead of wrongly logging a failure path.
+                if (Core::ERROR_NONE == status)
                 {
                     deviceInfo.deviceLevel = libusb_get_port_numbers(devs[index], portPath, sizeof(portPath));
                     if ( 1 < deviceInfo.deviceLevel )

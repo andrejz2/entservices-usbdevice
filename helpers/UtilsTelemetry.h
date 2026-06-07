@@ -60,9 +60,12 @@ namespace Utils
 
             // get rid of const for t2_event_s
             char* error = strdup(message.c_str());
-            t2_event_s((char *)"THUNDER_ERROR", error);
             if (error)
             {
+                // FIX(Issue 3): API misuse
+                // Reason: The duplicated buffer must be validated before passing it to the telemetry API.
+                // Impact: Avoids passing a null pointer to t2_event_s when memory allocation fails.
+                t2_event_s((char *)"THUNDER_ERROR", error);
                 free(error);
             }
 #endif
