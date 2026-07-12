@@ -67,8 +67,14 @@ namespace Plugin {
         PluginInterfaceRef& operator=(PluginInterfaceRef&& other)
         {
             if (this != &other) {
+                // FIX(Issue 5): Incorrect lifetime handling
+                // Reason: Existing owned interface must be released before taking ownership from another instance.
+                // Impact: Prevents leaking previous interface references and keeps moved-from state consistent.
+                Reset();
                 _interface = other._interface;
+                _service = other._service;
                 other._interface = nullptr;
+                other._service = nullptr;
             }
             return *this;
         }

@@ -769,7 +769,7 @@ uint32_t USBDeviceImplementation::getUSBExtInfoStructFromDeviceDescriptor(libusb
 uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(libusb_device *pDev, Exchange::IUSBDevice::USBDeviceInfo *pUSBDeviceInfo)
 {
     struct libusb_device_descriptor desc = {0};
-    libusb_config_descriptor *config_desc;
+    libusb_config_descriptor *config_desc = nullptr;
     char deviceName[16] = {0}; 
     uint32_t status = Core::ERROR_GENERAL;
     int retValue = LIBUSB_SUCCESS;
@@ -829,6 +829,11 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
                     pUSBDeviceInfo->deviceStatus = WPEFramework::Exchange::IUSBDevice::USBDeviceStatus::DEVICE_STATUS_ACTIVE;
                 }
                 LOGINFO("bmAttributes: %u",config_desc->bmAttributes);
+                // FIX(Issue 7): Resource leaks
+                // Reason: libusb_get_active_config_descriptor allocates config descriptor memory.
+                // Impact: Frees descriptor per call to prevent cumulative memory leaks.
+                libusb_free_config_descriptor(config_desc);
+                config_desc = nullptr;
             }
             else
             {
@@ -1133,7 +1138,10 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
                 uint8_t portPath[8] = {0}; // Maximum 8 levels (depends on USB architecture)
 
                 status = USBDeviceImplementation::instance()->getUSBDeviceInfoStructFromDeviceDescriptor(devs[index], &deviceInfo);
-                if (Core::ERROR_NONE != status)
+                // FIX(Issue 8): Logic defects
+                // Reason: Parent metadata should be computed only when device info retrieval succeeds.
+                // Impact: Restores correct success/failure flow and avoids reporting false failures.
+                if (Core::ERROR_NONE == status)
                 {
                     deviceInfo.deviceLevel = libusb_get_port_numbers(devs[index], portPath, sizeof(portPath));
                     if ( 1 < deviceInfo.deviceLevel )
