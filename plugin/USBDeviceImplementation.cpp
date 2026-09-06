@@ -829,6 +829,10 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
                     pUSBDeviceInfo->deviceStatus = WPEFramework::Exchange::IUSBDevice::USBDeviceStatus::DEVICE_STATUS_ACTIVE;
                 }
                 LOGINFO("bmAttributes: %u",config_desc->bmAttributes);
+                // FIX(Issue 3): Resource leaks
+                // Reason: libusb_get_active_config_descriptor allocates descriptor memory that must be freed.
+                // Impact: Prevents per-call descriptor leaks while preserving existing behavior.
+                libusb_free_config_descriptor(config_desc);
             }
             else
             {
@@ -1133,7 +1137,10 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
                 uint8_t portPath[8] = {0}; // Maximum 8 levels (depends on USB architecture)
 
                 status = USBDeviceImplementation::instance()->getUSBDeviceInfoStructFromDeviceDescriptor(devs[index], &deviceInfo);
-                if (Core::ERROR_NONE != status)
+                // FIX(Issue 2): Logic defect
+                // Reason: device hierarchy post-processing should only run after successful descriptor extraction.
+                // Impact: Restores correct success/failure flow and avoids false warning logs.
+                if (Core::ERROR_NONE == status)
                 {
                     deviceInfo.deviceLevel = libusb_get_port_numbers(devs[index], portPath, sizeof(portPath));
                     if ( 1 < deviceInfo.deviceLevel )
