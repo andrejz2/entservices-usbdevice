@@ -60,10 +60,14 @@ namespace Utils
 
             // get rid of const for t2_event_s
             char* error = strdup(message.c_str());
-            t2_event_s((char *)"THUNDER_ERROR", error);
-            if (error)
-            {
+            // FIX(Issue 6): Null dereferences
+            // Reason: strdup can fail and return nullptr under memory pressure.
+            // Impact: Avoids passing null to telemetry API and prevents undefined behavior.
+            if (error != nullptr) {
+                t2_event_s((char *)"THUNDER_ERROR", error);
                 free(error);
+            } else {
+                t2_event_s((char *)"THUNDER_ERROR", (char*)"memory-allocation-failed");
             }
 #endif
         };
