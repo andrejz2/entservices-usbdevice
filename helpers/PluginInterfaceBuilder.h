@@ -67,8 +67,14 @@ namespace Plugin {
         PluginInterfaceRef& operator=(PluginInterfaceRef&& other)
         {
             if (this != &other) {
+                // FIX(Issue 5): Resource leaks
+                // Reason: Existing held interface must be released before overwriting ownership.
+                // Impact: Prevents leaks and keeps interface/controller ownership state consistent after move assignment.
+                Reset();
                 _interface = other._interface;
+                _service = other._service;
                 other._interface = nullptr;
+                other._service = nullptr;
             }
             return *this;
         }

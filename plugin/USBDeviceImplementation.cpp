@@ -21,6 +21,7 @@
 #include <sys/prctl.h>
 #include "UtilsJsonRpc.h"
 #include <mutex>
+#include <cstdio>
 #include "tracing/Logging.h"
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
@@ -602,7 +603,10 @@ uint32_t USBDeviceImplementation::getUSBDescriptorValue(libusb_device_handle *ha
             uint16_t descValue;
             // Copy the string descriptor information
 
-            for (size_t i = USB_STRING_DESC_HEADER_LENGTH; i < bufStrLen; i+=2)
+            // FIX(Issue 7): Buffer overflows / bounds violations
+            // Reason: Parsing must guarantee two-byte UTF-16 reads stay inside descriptor bounds.
+            // Impact: Prevents out-of-bounds reads when malformed descriptors report odd lengths.
+            for (size_t i = USB_STRING_DESC_HEADER_LENGTH; (i + 1) < bufStrLen; i += 2)
             {
                 descValue = (uint16_t)((uint16_t)(descBuf[i]) | (uint16_t)((uint16_t)(descBuf[i + 1]) << 8));
                 if (descValue < 0x80)
@@ -790,7 +794,10 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
 
 
 
-            sprintf(deviceName, "%03d/%03d", libusb_get_bus_number(pDev), libusb_get_device_address(pDev));
+            // FIX(Issue 8): Buffer overflows / bounds violations
+            // Reason: Bounded formatting avoids writes past fixed-size stack buffers.
+            // Impact: Eliminates potential overflow for unexpectedly large bus/device numbers.
+            (void)std::snprintf(deviceName, sizeof(deviceName), "%03d/%03d", libusb_get_bus_number(pDev), libusb_get_device_address(pDev));
             pUSBDeviceInfo->device.deviceName = std::string(deviceName);
 
             if (LIBUSB_CLASS_PER_INTERFACE == desc.bDeviceClass)
@@ -1017,14 +1024,20 @@ void USBDeviceImplementation::dispatchEvent(Event event, Exchange::IUSBDevice::U
 
 void USBDeviceImplementation::Dispatch(Event event, const Exchange::IUSBDevice::USBDevice usbDevice)
 {
+     // FIX(Issue 9): Concurrency race conditions
+     // Reason: Notification callbacks may re-enter plugin methods that also attempt to acquire _adminLock.
+     // Impact: Avoids lock inversion/deadlock by invoking callbacks outside the critical section.
+     std::list<Exchange::IUSBDevice::INotification*> notifications;
      _adminLock.Lock();
+     notifications = _usbDeviceNotification;
+     _adminLock.Unlock();
 
-     std::list<Exchange::IUSBDevice::INotification*>::const_iterator index(_usbDeviceNotification.begin());
+     std::list<Exchange::IUSBDevice::INotification*>::const_iterator index(notifications.begin());
 
      switch(event) {
          case USBDEVICE_HOTPLUG_EVENT_DEVICE_ARRIVED:
             LOGINFO("USBDEVICE_HOTPLUG_EVENT_DEVICE_ARRIVED Received");
-             while (index != _usbDeviceNotification.end())
+             while (index != notifications.end())
              {
                  LOGINFO("Call OnDevicePluggedIn");
 
@@ -1035,7 +1048,7 @@ void USBDeviceImplementation::Dispatch(Event event, const Exchange::IUSBDevice::
 
          case USBDEVICE_HOTPLUG_EVENT_DEVICE_LEFT:
             LOGINFO("USBDEVICE_HOTPLUG_EVENT_DEVICE_LEFT Received");
-             while (index != _usbDeviceNotification.end())
+             while (index != notifications.end())
              {
                  LOGINFO("Call OnDevicePluggedOut");
                  (*index)->OnDevicePluggedOut(usbDevice);
@@ -1046,8 +1059,6 @@ void USBDeviceImplementation::Dispatch(Event event, const Exchange::IUSBDevice::
         default:
              break;
      }
-
-     _adminLock.Unlock();
 }
 
 Core::hresult USBDeviceImplementation::GetDeviceList(IUSBDeviceIterator*& devices) const
@@ -1122,7 +1133,10 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 8): Buffer overflows / bounds violations
+            // Reason: Bounded writes prevent stack corruption on unexpected identifier width.
+            // Impact: Keeps usbDeviceName writes within allocated bounds.
+            (void)std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {
@@ -1133,7 +1147,10 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
                 uint8_t portPath[8] = {0}; // Maximum 8 levels (depends on USB architecture)
 
                 status = USBDeviceImplementation::instance()->getUSBDeviceInfoStructFromDeviceDescriptor(devs[index], &deviceInfo);
-                if (Core::ERROR_NONE != status)
+                // FIX(Issue 10): Logic defects
+                // Reason: Parent metadata should be derived only when descriptor parsing succeeded.
+                // Impact: Ensures success path proceeds correctly and failure path is logged.
+                if (Core::ERROR_NONE == status)
                 {
                     deviceInfo.deviceLevel = libusb_get_port_numbers(devs[index], portPath, sizeof(portPath));
                     if ( 1 < deviceInfo.deviceLevel )
@@ -1192,7 +1209,10 @@ Core::hresult USBDeviceImplementation::BindDriver(const string &deviceName) cons
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 8): Buffer overflows / bounds violations
+            // Reason: Use bounded formatting for fixed-size destination buffer.
+            // Impact: Prevents accidental overwrite beyond usbDeviceName.
+            (void)std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {
@@ -1277,7 +1297,10 @@ Core::hresult USBDeviceImplementation::UnbindDriver(const string &deviceName) co
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 8): Buffer overflows / bounds violations
+            // Reason: Use bounded formatting for fixed-size destination buffer.
+            // Impact: Prevents accidental overwrite beyond usbDeviceName.
+            (void)std::snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {
