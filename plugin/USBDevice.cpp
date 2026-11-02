@@ -149,7 +149,10 @@ namespace WPEFramework
 
     void USBDevice::Deactivated(RPC::IRemoteConnection* connection)
     {
-        if (connection->Id() == _connectionId)
+        // FIX(Issue 5): Null dereference
+        // Reason: The remote connection pointer can be null during deactivation callbacks.
+        // Impact: Avoids crash by validating the pointer before reading the connection id.
+        if ((connection != nullptr) && (connection->Id() == _connectionId))
         {
             SYSLOG(Logging::Shutdown, (string(_T("USBDevice Deactivated"))));
             ASSERT(nullptr != _service);
