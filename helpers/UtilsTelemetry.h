@@ -58,12 +58,19 @@ namespace Utils
             WPEFramework::Trace::Format(message, format, parameters);
             va_end(parameters);
 
-            // get rid of const for t2_event_s
+            // FIX(Issue 4): Null dereferences
+            // Reason: strdup may fail and return nullptr under memory pressure.
+            // Impact: Prevents passing a null pointer into telemetry API and avoids undefined behavior.
             char* error = strdup(message.c_str());
-            t2_event_s((char *)"THUNDER_ERROR", error);
-            if (error)
+            if (error != nullptr)
             {
+                t2_event_s((char *)"THUNDER_ERROR", error);
                 free(error);
+            }
+            else
+            {
+                static char fallbackError[] = "TELEMETRY_ERROR_ALLOCATION_FAILURE";
+                t2_event_s((char *)"THUNDER_ERROR", fallbackError);
             }
 #endif
         };
