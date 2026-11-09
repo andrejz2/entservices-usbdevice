@@ -790,8 +790,18 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
 
 
 
-            sprintf(deviceName, "%03d/%03d", libusb_get_bus_number(pDev), libusb_get_device_address(pDev));
-            pUSBDeviceInfo->device.deviceName = std::string(deviceName);
+            // FIX(Issue 5): Buffer overflows / bounds violations
+            // Reason: Writing with unbounded formatting into fixed-size stack buffer can overflow if format assumptions change.
+            // Impact: Uses bounded formatting and guards against truncation to keep device name safe and valid.
+            const int deviceNameLength = snprintf(deviceName, sizeof(deviceName), "%03d/%03d", libusb_get_bus_number(pDev), libusb_get_device_address(pDev));
+            if ((deviceNameLength >= 0) && (static_cast<size_t>(deviceNameLength) < sizeof(deviceName)))
+            {
+                pUSBDeviceInfo->device.deviceName = std::string(deviceName);
+            }
+            else
+            {
+                LOGERR("Failed to format USB device name");
+            }
 
             if (LIBUSB_CLASS_PER_INTERFACE == desc.bDeviceClass)
             {
@@ -829,6 +839,10 @@ uint32_t USBDeviceImplementation::getUSBDeviceInfoStructFromDeviceDescriptor(lib
                     pUSBDeviceInfo->deviceStatus = WPEFramework::Exchange::IUSBDevice::USBDeviceStatus::DEVICE_STATUS_ACTIVE;
                 }
                 LOGINFO("bmAttributes: %u",config_desc->bmAttributes);
+                // FIX(Issue 6): Resource leaks
+                // Reason: libusb_get_active_config_descriptor allocates descriptor memory that must be released.
+                // Impact: Frees descriptor in success path to avoid persistent libusb heap/resource leaks.
+                libusb_free_config_descriptor(config_desc);
             }
             else
             {
@@ -1122,7 +1136,15 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 7): Buffer overflows / bounds violations
+            // Reason: Unbounded formatting into a fixed stack buffer can truncate or overflow.
+            // Impact: Uses bounded formatting and skips invalidly formatted entries safely.
+            const int usbDeviceNameLength = snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            if ((usbDeviceNameLength < 0) || (static_cast<size_t>(usbDeviceNameLength) >= sizeof(usbDeviceName)))
+            {
+                LOGERR("Failed to format USB device name");
+                continue;
+            }
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {
@@ -1133,7 +1155,10 @@ Core::hresult USBDeviceImplementation::GetDeviceInfo(const string &deviceName, U
                 uint8_t portPath[8] = {0}; // Maximum 8 levels (depends on USB architecture)
 
                 status = USBDeviceImplementation::instance()->getUSBDeviceInfoStructFromDeviceDescriptor(devs[index], &deviceInfo);
-                if (Core::ERROR_NONE != status)
+                // FIX(Issue 8): Logic defects
+                // Reason: The old condition inverted success/failure handling for device-info extraction.
+                // Impact: Parent discovery now runs only on success and failures are reported correctly.
+                if (Core::ERROR_NONE == status)
                 {
                     deviceInfo.deviceLevel = libusb_get_port_numbers(devs[index], portPath, sizeof(portPath));
                     if ( 1 < deviceInfo.deviceLevel )
@@ -1192,7 +1217,15 @@ Core::hresult USBDeviceImplementation::BindDriver(const string &deviceName) cons
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 9): Buffer overflows / bounds violations
+            // Reason: Unbounded sprintf can write past fixed-size buffer boundaries.
+            // Impact: Constrains write to buffer size and avoids using malformed names.
+            const int usbDeviceNameLength = snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            if ((usbDeviceNameLength < 0) || (static_cast<size_t>(usbDeviceNameLength) >= sizeof(usbDeviceName)))
+            {
+                LOGERR("Failed to format USB device name");
+                continue;
+            }
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {
@@ -1277,7 +1310,15 @@ Core::hresult USBDeviceImplementation::UnbindDriver(const string &deviceName) co
         {
             char usbDeviceName[10] = {0};
 
-            (void)sprintf(usbDeviceName, "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            // FIX(Issue 10): Buffer overflows / bounds violations
+            // Reason: Unbounded sprintf can write past fixed-size buffer boundaries.
+            // Impact: Constrains write to buffer size and avoids using malformed names.
+            const int usbDeviceNameLength = snprintf(usbDeviceName, sizeof(usbDeviceName), "%03d/%03d", libusb_get_bus_number(devs[index]), libusb_get_device_address(devs[index]));
+            if ((usbDeviceNameLength < 0) || (static_cast<size_t>(usbDeviceNameLength) >= sizeof(usbDeviceName)))
+            {
+                LOGERR("Failed to format USB device name");
+                continue;
+            }
 
             if (deviceName.compare(string(usbDeviceName)) != 0)
             {
